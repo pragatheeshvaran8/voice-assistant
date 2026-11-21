@@ -1,0 +1,10 @@
+# Secrets
+.env
+
+# Runtime output
+logs/
+*.wav
+
+# Tooling
+node_modules/
+.vscode/

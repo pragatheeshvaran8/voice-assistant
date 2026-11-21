@@ -1,0 +1,19 @@
+{
+  "name": "voice-assistant",
+  "version": "1.0.0",
+  "description": "Speak a question, Gemini answers, Windows speaks the reply. Node brain, PowerShell ears and mouth, zero npm dependencies.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "brain": "node brain/server.js",
+    "chat": "node brain/chat.js",
+    "voice": "powershell -NoProfile -ExecutionPolicy Bypass -File voice/assistant.ps1",
+    "typed": "powershell -NoProfile -ExecutionPolicy Bypass -File voice/assistant.ps1 -Typed",
+    "selftest": "powershell -NoProfile -ExecutionPolicy Bypass -File voice/selftest.ps1",
+    "report": "node scripts/report.js",
+    "test": "node --test"
+  }
+}
