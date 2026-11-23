@@ -1,7 +1,5 @@
 # GenAI cheat sheet
 
-Two-line answers for each interview topic. The assistant can search this file, so you can ask it these questions by voice.
-
 ## LLM basics
 
 ### Tokens

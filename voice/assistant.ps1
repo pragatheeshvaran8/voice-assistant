@@ -3,30 +3,34 @@
   Voice assistant: you speak, the brain (LLM) answers, Windows speaks the reply.
 
 .DESCRIPTION
-  Ears:  Windows speech recognition (offline, System.Speech dictation)
+  Ears:  Wispr Flow types your spoken question (default),
+         or Windows speech recognition (offline, hands-free, but weak with accents)
   Brain: Node server in brain/ (started for you if it is not running)
   Mouth: Windows text to speech, sentence by sentence as the answer streams in
 
 .EXAMPLE
-  .\start.cmd                      # voice mode
+  .\start.cmd                      # Wispr Flow: hold Ctrl+Win, speak, let go, press Enter
+  .\start.cmd -Ears windows        # Windows speech recognition, hands-free
   .\start.cmd -Typed               # type questions, hear the answers
   .\start.cmd -Typed -NoSpeak      # text only
-  .\start.cmd -Culture en-GB       # use the UK English recognizer
 #>
 param(
-    # Type questions instead of speaking them.
+    # Who turns your voice into text: wispr (Wispr Flow), windows (Windows speech recognition), keyboard.
+    [ValidateSet('wispr', 'windows', 'keyboard')]
+    [string]$Ears = 'wispr',
+    # Type questions instead of speaking them. Same as -Ears keyboard.
     [switch]$Typed,
     # Print answers only, do not speak them.
     [switch]$NoSpeak,
-    # Recognize one WAV file instead of the microphone, answer, and exit (for testing).
+    # Recognize one WAV file with the Windows ears, answer, and exit (for testing).
     [string]$InputWav,
-    # Speech recognizer language. Installed: en-US, en-GB.
+    # Windows ears only: recognizer language. Installed: en-US, en-GB.
     [string]$Culture = 'en-US',
-    # Ignore what was heard when the recognizer is less sure than this (0 to 1).
+    # Windows ears only: ignore what was heard when the recognizer is less sure than this (0 to 1).
     [double]$MinConfidence = 0.3,
-    # Silence (ms) that ends your question. 0 = Windows default. Lower = faster, but may cut you off.
+    # Windows ears only: silence (ms) that ends your question. 0 = Windows default.
     [int]$EndSilenceMs = 0,
-    # Seconds to wait for you to start talking before listening again.
+    # Windows ears only: seconds to wait for you to start talking before listening again.
     [int]$ListenSec = 10,
     # Part of the voice name: Zira, David, Hazel.
     [string]$Voice = 'Zira',
@@ -39,13 +43,17 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'VoiceLib.ps1')
 
-$mode = if ($InputWav) { 'wav' } elseif ($Typed) { 'typed' } else { 'voice' }
+$mode = if ($InputWav) { 'wav' }
+        elseif ($Typed -or $Ears -eq 'keyboard') { 'typed' }
+        elseif ($Ears -eq 'windows') { 'voice' }
+        else { 'wispr' }
+$readsLine = $mode -eq 'typed' -or $mode -eq 'wispr'   # Wispr Flow types into the console like a keyboard
 $url = Get-BrainUrl
 $sessionId = 'ps-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
 $useNotes = -not $NoNotes
 $brainProcess = $null
 $mouth = $null
-$ears = $null
+$recognizer = $null
 
 function Say([string]$Text) {
     Write-Host "  $Text" -ForegroundColor Green
@@ -67,12 +75,19 @@ try {
 
     # ------------------------------------------------------------ mouth and ears
     if (-not $NoSpeak) { $mouth = New-Mouth -Voice $Voice -Rate $Rate }
-    if ($mode -eq 'voice') { $ears = New-Ears -Culture $Culture -EndSilenceMs $EndSilenceMs }
-    if ($mode -eq 'wav') { $ears = New-Ears -Culture $Culture -EndSilenceMs $EndSilenceMs -WavPath $InputWav }
+    if ($mode -eq 'voice') { $recognizer = New-Ears -Culture $Culture -EndSilenceMs $EndSilenceMs }
+    if ($mode -eq 'wav') { $recognizer = New-Ears -Culture $Culture -EndSilenceMs $EndSilenceMs -WavPath $InputWav }
 
     if ($mode -eq 'voice') {
         Write-Host 'Speak after "Listening...". Say "goodbye" to stop. Press any key to cut an answer short.' -ForegroundColor DarkGray
         Say 'Hi. I am listening.'
+    } elseif ($mode -eq 'wispr') {
+        if (-not (Get-Process -Name 'Wispr Flow' -ErrorAction SilentlyContinue)) {
+            Write-Host 'Wispr Flow is not running. Start it from the Start menu, or type your questions.' -ForegroundColor Yellow
+        }
+        Write-Host 'Hold Ctrl+Win and ask your question. Let go, then press Enter. Say "goodbye" to stop.' -ForegroundColor DarkGray
+        Write-Host 'Keep this window in focus, so Wispr Flow types here. Press any key to cut an answer short.' -ForegroundColor DarkGray
+        Say 'Hi. I am ready.'
     } elseif ($mode -eq 'typed') {
         Write-Host 'Type a question and press Enter. Type "goodbye" or press Ctrl+C to stop.' -ForegroundColor DarkGray
     }
@@ -80,7 +95,7 @@ try {
     # ------------------------------------------------------------ loop
     while ($true) {
         $heard = $null
-        if ($mode -eq 'typed') {
+        if ($readsLine) {
             Write-Host 'you> ' -NoNewline -ForegroundColor Yellow
             $line = [Console]::In.ReadLine()
             if ($null -eq $line) { break }      # end of piped input
@@ -92,7 +107,7 @@ try {
                 Clear-KeyBuffer
                 Write-Host 'Listening...' -ForegroundColor DarkGray
             }
-            $heard = Receive-Speech $ears $ListenSec
+            $heard = Receive-Speech $recognizer $ListenSec
             if ($null -eq $heard) {
                 if ($mode -eq 'wav') { Write-Host 'Nothing recognized in the WAV file.' -ForegroundColor Red; break }
                 continue                          # nobody spoke; listen again
@@ -153,6 +168,7 @@ try {
             stt_ms                   = $heard.SttMs
             client_first_sentence_ms = $reply.FirstSentenceMs
             client_total_ms          = $reply.TotalMs
+            input_to_voice_ms        = $script:firstAudioMs   # question in (Enter pressed) -> first sentence spoken
             voice_to_voice_ms        = $null
             error                    = $(if ($reply.Error) { $reply.Error.detail } else { $null })
         }
@@ -167,6 +183,7 @@ try {
             $s = $reply.Done.stats
             $parts = @("first sentence $(Format-Seconds $reply.FirstSentenceMs)", "full answer $(Format-Seconds $reply.TotalMs)")
             if ($null -ne $row.voice_to_voice_ms) { $parts = @("you stopped -> it spoke $(Format-Seconds $row.voice_to_voice_ms)") + $parts }
+            elseif ($readsLine -and $null -ne $row.input_to_voice_ms) { $parts = @("Enter -> it spoke $(Format-Seconds $row.input_to_voice_ms)") + $parts }
             if ($s.tokens_per_sec) { $parts += "$($s.tokens_per_sec) tok/s" }
             $parts += $s.model
             Write-Host ("  [{0}]" -f ($parts -join ' | ')) -ForegroundColor DarkGray
@@ -179,6 +196,6 @@ try {
     }
 } finally {
     if ($mouth) { $mouth.Dispose() }
-    if ($ears) { $ears.Dispose() }
+    if ($recognizer) { $recognizer.Dispose() }
     Stop-Brain $brainProcess
 }

@@ -1,9 +1,9 @@
 @echo off
 rem Voice assistant. Double-click, or run from a terminal with options:
-rem   start.cmd                  talk to it
+rem   start.cmd                  Wispr Flow: hold Ctrl+Win, ask, let go, press Enter
+rem   start.cmd -Ears windows    Windows speech recognition, hands-free
 rem   start.cmd -Typed           type questions, hear the answers
 rem   start.cmd -Typed -NoSpeak  text only
-rem   start.cmd -Culture en-GB   UK English speech recognition
 cd /d "%~dp0"
 if not exist ".env" (
   echo No .env file found. Copy .env.example to .env and add your OpenRouter key.

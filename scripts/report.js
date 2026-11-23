@@ -1,7 +1,7 @@
 // Latency table from logs/turns.jsonl:  npm run report
 //
 // Options:
-//   --mode voice|typed|wav|chat|selftest   only rows from that mode
+//   --mode wispr|voice|typed|wav|chat|selftest   only rows from that mode
 //   --last 20                              only the newest N rows
 //
 // Prints a markdown table and writes it to results/latency.md.
@@ -24,6 +24,7 @@ const STAGES = [
   ['ttft_ms', 'Brain: time to first token'],
   ['first_sentence_ms', 'Brain: first whole sentence ready'],
   ['client_first_sentence_ms', 'Client: question sent, first sentence back'],
+  ['input_to_voice_ms', 'Question in (Enter pressed), assistant starts talking'],
   ['voice_to_voice_ms', 'You stop talking, assistant starts talking'],
   ['total_ms', 'Brain: full answer'],
   ['tokens_per_sec', 'Tokens per second (not ms)'],

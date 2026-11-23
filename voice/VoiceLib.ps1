@@ -11,6 +11,7 @@ Add-Type -AssemblyName System.Net.Http
 
 $script:VaRoot = Split-Path -Parent $PSScriptRoot
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$script:SeenInfo = @{}
 
 # ---------------------------------------------------------------- settings
 
@@ -141,7 +142,11 @@ function Invoke-Brain {
                 $result.Error = $evt
             } elseif ($evt.type -eq 'info') {
                 $result.Info += $evt.message
-                Write-Host "  ($($evt.message))" -ForegroundColor DarkGray
+                # Show each message once per run, not on every question.
+                if (-not $script:SeenInfo.ContainsKey($evt.message)) {
+                    $script:SeenInfo[$evt.message] = $true
+                    Write-Host "  ($($evt.message))" -ForegroundColor DarkGray
+                }
             }
         }
         $reader.Dispose()
@@ -234,7 +239,8 @@ function Wait-Speech($Mouth, [System.Collections.ArrayList]$Prompts) {
     $canReadKeys = -not [Console]::IsInputRedirected
     while (-not $Prompts[$Prompts.Count - 1].IsCompleted) {
         if ($canReadKeys -and [Console]::KeyAvailable) {
-            [void][Console]::ReadKey($true)
+            # Leave the key in the buffer: it may be the first letter of your next
+            # question, typed by you or by Wispr Flow. Voice mode clears it before listening.
             $Mouth.SpeakAsyncCancelAll()
             return $true
         }
@@ -297,4 +303,31 @@ function Add-BrainStats($Row, $Done) {
 function Format-Seconds($Ms) {
     if ($null -eq $Ms) { return '-' }
     return ('{0:0.00} s' -f ($Ms / 1000.0))
+}
+
+# ---------------------------------------------------------------- word match (tests)
+
+function Split-Words([string]$Text) {
+    return @(($Text.ToLowerInvariant() -replace "[^a-z0-9 ]", ' ').Split(' ', [StringSplitOptions]::RemoveEmptyEntries))
+}
+
+# Longest common subsequence of words = how many words were heard right, in order.
+function Get-WordsRight([string]$Expected, [string]$Heard) {
+    $a = Split-Words $Expected
+    $b = Split-Words $Heard
+    $dp = New-Object 'int[,]' ($a.Count + 1), ($b.Count + 1)
+    for ($i = 1; $i -le $a.Count; $i++) {
+        for ($j = 1; $j -le $b.Count; $j++) {
+            $pi = $i - 1
+            $pj = $j - 1
+            if ($a[$pi] -eq $b[$pj]) {
+                $dp[$i, $j] = $dp[$pi, $pj] + 1
+            } else {
+                $up = $dp[$pi, $j]
+                $left = $dp[$i, $pj]
+                $dp[$i, $j] = [Math]::Max($up, $left)
+            }
+        }
+    }
+    return @{ Right = $dp[$a.Count, $b.Count]; Total = $a.Count }
 }

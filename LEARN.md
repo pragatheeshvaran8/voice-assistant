@@ -14,8 +14,8 @@ Read these in order. Each file starts with a comment that says what it does.
 
 | # | What happens | Where |
 |---|---|---|
-| 1 | The mic listens. Windows turns speech into text. | `voice/VoiceLib.ps1`: `New-Ears`, `Receive-Speech` |
-| 2 | Low-confidence text is ignored. Local commands run on the laptop. | `voice/assistant.ps1` main loop, `Get-LocalCommand` |
+| 1 | Wispr Flow turns your speech into text and types it after `you>`. The script reads the line. With `-Ears windows`, Windows does this instead. | `voice/assistant.ps1`: `ReadLine()`. Windows ears: `New-Ears`, `Receive-Speech` in `VoiceLib.ps1` |
+| 2 | Local commands run on the laptop. With the Windows ears, low-confidence text is ignored first. | `voice/assistant.ps1` main loop, `Get-LocalCommand` |
 | 3 | The text is sent to the brain. The reply is read line by line as it streams. | `VoiceLib.ps1`: `Invoke-Brain` |
 | 4 | The brain receives the question for this session. | `brain/app.js`: `ask()` |
 | 5 | The notes are searched. | `brain/notes.js`: `NotesIndex.search()` |
@@ -61,9 +61,13 @@ Use `npm run chat` for most of these. It shows the tokens as they arrive and the
 
 ### Speech recognition
 
-- Run `start.cmd`. Each line shows the confidence and how long after you stopped the text was ready.
-- Try `start.cmd -EndSilenceMs 300`. It answers sooner but may cut you off. Try `900`.
-- Try `start.cmd -Culture en-GB` and compare how well it hears you.
+- Run `npm run miccheck`. It records each mic and shows how loud the room is and how loud you are.
+- On 22 Nov your voice was 37 to 40 dB above the room on the Realtek mic. That is very clean sound.
+- Windows still got only 2 or 3 of 9 words. The sound was fine. The old offline model could not follow the accent.
+- That is why Wispr Flow is the default ears. A modern cloud model handles accents far better.
+- Lesson: measure the sound first. Then you know if the mic or the model is the problem.
+- Run `start.cmd -Ears windows` to see the old engine. Each line shows the confidence and how long after you stopped the text was ready.
+- With the Windows ears, try `-EndSilenceMs 300`. It answers sooner but may cut you off. Try `900`.
 - `npm run selftest` plays the role of a person with a Windows voice. It shows a real mistake: "KV cache" is heard as "KB cache".
 - The fix is in the prompt. `USER_CONTEXT` lists your topics. The system prompt rule "Speech recognition often mishears words..." tells the model to repair misheard terms.
 - On 21 Nov, `USER_CONTEXT` alone did not fix it. The rule plus `USER_CONTEXT` did. Remove both and the wrong "knowledge base cache" answer comes back.
@@ -87,16 +91,17 @@ No code changes are needed. llama.cpp speaks the same API as OpenRouter.
 
 ## Step 4. Fill your latency table
 
-Ask about 10 questions by voice. Then run `npm run report -- --mode voice`. Copy the medians here:
+Ask about 10 questions with Wispr Flow. Then run `npm run report -- --mode wispr`. Copy the medians here:
 
 | Stage | Median | p90 |
 |---|---|---|
-| Ears: you stop talking, text is ready | | |
 | Brain: time to first token | | |
 | Brain: first whole sentence | | |
-| You stop talking, assistant starts talking | | |
+| Question in (Enter pressed), assistant starts talking | | |
 | Brain: full answer | | |
 | Tokens per second | | |
+
+The ears time is missing with Wispr Flow. The app only sees the text when you press Enter. In an interview, say so. Then say what you would do: time the key press, or use a speech API that reports when you stopped talking.
 
 Self-test numbers from 21 Nov 2026 for comparison. Free Nemotron model, 3 questions, typed into the brain from WAV files:
 
@@ -124,4 +129,5 @@ Answer each one out loud in under a minute. The hint says where the answer is.
 | What is the KV cache and why does it matter for a chat app? | Cheat sheet: KV cache |
 | How is Whisper different from Windows speech recognition? | Cheat sheet: How Whisper differs |
 | Speech recognition misheard a word. How did you handle it? | `USER_CONTEXT` and the prompt rule, plus the confidence cutoff |
+| Why did you replace Windows speech recognition with Wispr Flow? | `npm run miccheck`: clean sound, 37 to 40 dB above the room, but only 2 or 3 of 9 words right |
 | How did you test a voice app without talking to it? | `npm run selftest`: a Windows voice speaks into a WAV, and the ears read the WAV |

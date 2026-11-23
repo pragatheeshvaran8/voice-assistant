@@ -13,6 +13,7 @@
     "voice": "powershell -NoProfile -ExecutionPolicy Bypass -File voice/assistant.ps1",
     "typed": "powershell -NoProfile -ExecutionPolicy Bypass -File voice/assistant.ps1 -Typed",
     "selftest": "powershell -NoProfile -ExecutionPolicy Bypass -File voice/selftest.ps1",
+    "miccheck": "powershell -NoProfile -ExecutionPolicy Bypass -File voice/miccheck.ps1",
     "report": "node scripts/report.js",
     "test": "node --test"
   }

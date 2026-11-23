@@ -30,31 +30,6 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'VoiceLib.ps1')
 
-function Split-Words([string]$Text) {
-    return @(($Text.ToLowerInvariant() -replace "[^a-z0-9 ]", ' ').Split(' ', [StringSplitOptions]::RemoveEmptyEntries))
-}
-
-# Longest common subsequence of words = how many words were heard right, in order.
-function Get-WordsRight([string]$Expected, [string]$Heard) {
-    $a = Split-Words $Expected
-    $b = Split-Words $Heard
-    $dp = New-Object 'int[,]' ($a.Count + 1), ($b.Count + 1)
-    for ($i = 1; $i -le $a.Count; $i++) {
-        for ($j = 1; $j -le $b.Count; $j++) {
-            $pi = $i - 1
-            $pj = $j - 1
-            if ($a[$pi] -eq $b[$pj]) {
-                $dp[$i, $j] = $dp[$pi, $pj] + 1
-            } else {
-                $up = $dp[$pi, $j]
-                $left = $dp[$i, $pj]
-                $dp[$i, $j] = [Math]::Max($up, $left)
-            }
-        }
-    }
-    return @{ Right = $dp[$a.Count, $b.Count]; Total = $a.Count }
-}
-
 function Get-WavSeconds([string]$Path) {
     $bytes = [IO.File]::ReadAllBytes($Path)
     if ($bytes.Length -lt 44) { return 0 }
